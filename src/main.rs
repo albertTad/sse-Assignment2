@@ -1,7 +1,9 @@
 use std::fs;
 
-use aes_gcm::{Aes256Gcm, aead::Aead, AeadCore, Key, KeyInit};
-use rand_core::{RngCore, OsRng}; // Import the RngCore trait along with OsRng
+use aes_gcm::{
+    aead::{Aead, OsRng},
+    AeadCore, Aes256Gcm, Key, KeyInit,
+};
 
 use base64::prelude::*;
 use sha2::{Digest, Sha256};
@@ -22,7 +24,10 @@ use x25519_dalek::{PublicKey, StaticSecret};
 /// You may **not** change the signature of this function.
 ///
 fn save_to_file_as_b64(file_name: &str, data: &[u8]) {
-    let base64_data = BASE64_STANDARD.encode(data);
+    // Encode data as Base64 using the engine BASE64_STANDARD.
+    let base64_data: String = BASE64_STANDARD.encode(data);
+
+    // Write the contents of the Base64 string to the file given by file_name.
     fs::write(file_name, base64_data).expect("Unable to write to file");
 }
 
@@ -36,10 +41,15 @@ fn save_to_file_as_b64(file_name: &str, data: &[u8]) {
 /// You may **not** change the signature of this function.
 ///
 fn read_from_b64_file(file_name: &str) -> Vec<u8> {
-    let file_contents = fs::read_to_string(file_name).expect("Unable to read from file");
-    let decoded_bytes = BASE64_STANDARD
+    // Read the contents of the file given by file_name.
+    let file_contents: String = fs::read_to_string(file_name).expect("Unable to read from file");
+
+    // Decode the contents of the file using the engine BASE64_STANDARD.
+    let decoded_bytes: Vec<u8> = BASE64_STANDARD
         .decode(file_contents.as_bytes())
         .expect("Unable to decode Base64");
+
+    // Return the decoded bytes.
     return decoded_bytes;
 }
 
@@ -54,27 +64,17 @@ fn read_from_b64_file(file_name: &str) -> Vec<u8> {
 /// You may **not** change the signature of this function.
 ///
 fn keygen() -> ([u8; 32], [u8; 32]) {
-    // Generate a StaticSecret from random
-    let secret_key = StaticSecret::random();
+    // Generate a StaticSecret from random.
+    let secret_key: StaticSecret = StaticSecret::random();
 
-    // Generate a PublicKey from the StaticSecret
-    let public_key = PublicKey::from(&secret_key);
+    // Generate a PublicKey from this StaticSecret.
+    let public_key: PublicKey = PublicKey::from(&secret_key);
 
-    // Convert the secret key to bytes
-    let secret_key_bytes = secret_key.to_bytes();
+    // Convert the secret and public keys to bytes.
+    let secret_key_bytes: [u8; 32] = secret_key.to_bytes();
+    let public_key_bytes: [u8; 32] = *public_key.as_bytes();
 
-    // Convert the public key to bytes
-    let public_key_bytes = *public_key.as_bytes();
-
-    // Base64 encode the keys for printing
-    let secret_key_b64 = base64::encode(&secret_key_bytes);
-    let public_key_b64 = base64::encode(&public_key_bytes);
-
-    // Print the Base64-encoded keys
-    println!("Secret Key (Base64): {}", secret_key_b64);
-    println!("Public Key (Base64): {}", public_key_b64);
-
-    // Return a tuple of the secret key bytes and public key bytes
+    // Return a tuple of the secret key bytes and public key bytes.
     (secret_key_bytes, public_key_bytes)
 }
 
@@ -97,31 +97,41 @@ fn keygen() -> ([u8; 32], [u8; 32]) {
 /// You may **not** change the signature of this function.
 ///
 fn encrypt(input: Vec<u8>, sender_sk: [u8; 32], receiver_pk: [u8; 32]) -> Vec<u8> {
-  // Convert the sender's secret key and receiver's public key from bytes
-  let sender_secret = StaticSecret::from(sender_sk);
-  let receiver_public = PublicKey::from(receiver_pk);
+    // Convert the sender secret key array into a StaticSecret.
+    let sender_secret_key = StaticSecret::from(sender_sk);
 
-  // Derive a shared secret from the sender's secret key and receiver's public key
-  let shared_secret = sender_secret.diffie_hellman(&receiver_public);
+    // Convert the receiver public key array into a PublicKey.
+    let receiver_public_key = PublicKey::from(receiver_pk);
 
-  // Hash the shared secret to use as the AES key
-  let aes_key = Sha256::digest(shared_secret.as_bytes());
+    // Perform Diffie-Hellman key exchange to generate a SharedSecret.
+    let shared_secret = sender_secret_key.diffie_hellman(&receiver_public_key);
 
-  // Create an AES-GCM instance with the derived key
-  let cipher = Aes256Gcm::new_from_slice(&aes_key).expect("Failed to create AES instance");
+    // Hash the SharedSecret into 32 bytes using SHA-256.
+    let hashed_shared_secret = Sha256::digest(&shared_secret.as_bytes());
 
-  // Generate a random nonce for AES-GCM
-  let mut nonce = [0u8; 12]; // 96 bits nonce
-  OsRng.fill_bytes(&mut nonce);
+    // hasher.update(shared_secret);
+    // let hashed_shared_secret = hasher.finalize();
 
-  // Encrypt the plaintext
-  let ciphertext = cipher.encrypt(&nonce.into(), input.as_ref())
-      .expect("encryption failure!");
+    // let hashed_shared_secret = Sha256::new(&shared_secret);
+    // hasher.update(shared_secret);
+    // let hashed_shared_secret = hasher.finalize();
 
-  // Concatenate nonce and ciphertext for the output
-  [nonce.to_vec(), ciphertext].concat()
+    // Transform the hashed bytes into an AES-256-GCM key (Key<Aes256Gcm>).
+    let aes_key = Key::<Aes256Gcm>::from_slice(&hashed_shared_secret);
+
+    // Generate a random nonce for AES-256-GCM.
+    let nonce = Aes256Gcm::generate_nonce(&mut OsRng);
+
+    // Encrypt the input under the AES-256-GCM key and nonce.
+    let cipher = Aes256Gcm::new(&aes_key);
+
+    let ciphertext = cipher
+        .encrypt(&nonce, input.as_ref())
+        .expect("encryption failure!");
+
+    // Return the vector of bytes containing the ciphertext and the nonce.
+    return [ciphertext, nonce.to_vec()].concat();
 }
-
 
 /// Returns the decryption of ciphertext data to be received by a receiver from a sender.
 ///
@@ -142,8 +152,37 @@ fn encrypt(input: Vec<u8>, sender_sk: [u8; 32], receiver_pk: [u8; 32]) -> Vec<u8
 /// You may **not** change the signature of this function.
 ///
 fn decrypt(input: Vec<u8>, receiver_sk: [u8; 32], sender_pk: [u8; 32]) -> Vec<u8> {
-    // TODO
-    unimplemented!()
+    // Convert the receiver secret key array into a StaticSecret
+    let receiver_sk = StaticSecret::from(receiver_sk);
+
+    // Convert the sender public key array into a PublicKey
+    let sender_pk = PublicKey::from(sender_pk);
+
+    // Perform Diffie-Hellman key exchange to generate a SharedSecret
+    let shared_secret = receiver_sk.diffie_hellman(&sender_pk);
+
+    // Hash the SharedSecret into 32 bytes using SHA-256
+    let hashed_shared_secret = Sha256::digest(&shared_secret.as_bytes());
+
+    // Transform the hashed bytes into an AES-256-GCM key (Key<Aes256Gcm>)
+    let aes_key = Key::<Aes256Gcm>::from_slice(&hashed_shared_secret);
+
+    // Extract the ciphertext and the nonce from input.
+    let (ciphertext, nonce) = input.split_at(input.len() - 12);
+
+    // Convert the nonce into a fixed-size array
+    let mut nonce_arr = [0u8; 12];
+    nonce_arr.copy_from_slice(nonce);
+
+    let cipher = Aes256Gcm::new(aes_key);
+
+    // Decrypt the ciphertext using the AES-256-GCM key and nonce.
+    let decrypted = cipher
+        .decrypt(&nonce_arr.into(), ciphertext)
+        .expect("decryption failure!");
+
+    // Return the vector of bytes containing the plaintext data.
+    return decrypted;
 }
 
 /// The main function, which parses arguments and calls the correct cryptographic operations.
@@ -187,7 +226,6 @@ fn main() {
 
         // Call the encryption operation
         let output_bytes = encrypt(input, sender_sk, receiver_pk);
-
         // Save those bytes as Base64 to file
         save_to_file_as_b64(&output, &output_bytes);
     } else if cmd == "decrypt" {
