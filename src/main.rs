@@ -255,8 +255,29 @@ fn main() {
 
 #[cfg(test)]
 mod tests {
-    // TODO: Write tests that validate your encryption and decryption functionality
-    // Use the values in README.md to write these tests
-    // You may have to split up function to write tests
-    // For example, how can you test that both parties reach the same AES key?
+    use super::*;
+    // a unit test for encryption and decryption
+    #[test]
+    fn test_encrypt_decrypt() {
+        // Example keys (normally generated via keygen(), but hardcoded here for testing)
+        let sender_sk_bytes: [u8; 32] = [77, 105, 123, 62, 170, 198, 29, 150, 82, 70, 152, 150, 38, 114, 94, 160, 7, 84, 131, 221, 130, 89, 77, 243, 191, 147, 174, 121, 49, 91, 187, 214];
+        let receiver_pk_bytes: [u8; 32] = [246, 88, 196, 62, 121, 69, 20, 123, 199, 128, 26, 114, 238, 35, 255, 153, 209, 43, 110, 231, 78, 227, 115, 192, 90, 20, 40, 5, 151, 98, 253, 123];
+
+        // Example plaintext
+        let plaintext = b"Hello, world!";
+
+        // Encrypt the plaintext
+        let encrypted_data = encrypt(plaintext.to_vec(), sender_sk_bytes, receiver_pk_bytes);
+
+        // Assuming the receiver's secret key and sender's public key are known
+        // Here we use predefined keys for testing
+        let receiver_sk_bytes = sender_sk_bytes; 
+        let sender_pk_bytes = receiver_pk_bytes;
+
+        // Decrypt the encrypted data
+        let decrypted_data = decrypt(encrypted_data, receiver_sk_bytes, sender_pk_bytes);
+
+        // Verify that the decrypted data matches the original plaintext
+        assert_eq!(plaintext, &decrypted_data[..], "Decrypted data does not match the original plaintext.");
+    }
 }
