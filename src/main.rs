@@ -130,7 +130,14 @@ fn encrypt(input: Vec<u8>, sender_sk: [u8; 32], receiver_pk: [u8; 32]) -> Vec<u8
         .expect("encryption failure!");
 
     // Return the vector of bytes containing the ciphertext and the nonce.
-    return [ciphertext, nonce.to_vec()].concat();
+    // Directly concatenate the bytes of the nonce with the ciphertext
+    // Used concat() before but that may not correctly append the nonce to the ciphertext
+
+    let mut encrypted_data = Vec::new();
+    encrypted_data.extend_from_slice(&ciphertext);
+    encrypted_data.extend_from_slice(&nonce);
+
+    return encrypted_data;
 }
 
 /// Returns the decryption of ciphertext data to be received by a receiver from a sender.
@@ -256,12 +263,49 @@ fn main() {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn test_key_exchange() {
+        // Generate sender and receiver keys
+        let (sender_sk_bytes, sender_pk_bytes) = keygen();
+        let (receiver_sk_bytes, receiver_pk_bytes) = keygen();
+
+        // Convert byte arrays to StaticSecret instances
+        let sender_sk = StaticSecret::from(sender_sk_bytes);
+        let receiver_sk = StaticSecret::from(receiver_sk_bytes);
+
+        // Convert public key byte arrays to PublicKey instances
+        let sender_pk = PublicKey::from(sender_pk_bytes);
+        let receiver_pk = PublicKey::from(receiver_pk_bytes);
+
+        // Perform key exchange
+        let sender_shared_secret = sender_sk.diffie_hellman(&receiver_pk);
+        let receiver_shared_secret = receiver_sk.diffie_hellman(&sender_pk);
+
+        // Since binary operation `==` cannot be applied to type `SharedSecret`
+        // Convert shared secrets to byte arrays
+        let sender_shared_secret_bytes = sender_shared_secret.as_bytes();
+        let receiver_shared_secret_bytes = receiver_shared_secret.as_bytes();
+
+        // Ensure both parties derive the same shared secret
+        assert_eq!(
+            sender_shared_secret_bytes, receiver_shared_secret_bytes,
+            "Shared secrets are not equal"
+        );
+    }
+
     // a unit test for encryption and decryption
     #[test]
     fn test_encrypt_decrypt() {
         // Example keys (normally generated via keygen(), but hardcoded here for testing)
-        let sender_sk_bytes: [u8; 32] = [77, 105, 123, 62, 170, 198, 29, 150, 82, 70, 152, 150, 38, 114, 94, 160, 7, 84, 131, 221, 130, 89, 77, 243, 191, 147, 174, 121, 49, 91, 187, 214];
-        let receiver_pk_bytes: [u8; 32] = [246, 88, 196, 62, 121, 69, 20, 123, 199, 128, 26, 114, 238, 35, 255, 153, 209, 43, 110, 231, 78, 227, 115, 192, 90, 20, 40, 5, 151, 98, 253, 123];
+        let sender_sk_bytes: [u8; 32] = [
+            77, 105, 123, 62, 170, 198, 29, 150, 82, 70, 152, 150, 38, 114, 94, 160, 7, 84, 131,
+            221, 130, 89, 77, 243, 191, 147, 174, 121, 49, 91, 187, 214,
+        ];
+        let receiver_pk_bytes: [u8; 32] = [
+            246, 88, 196, 62, 121, 69, 20, 123, 199, 128, 26, 114, 238, 35, 255, 153, 209, 43, 110,
+            231, 78, 227, 115, 192, 90, 20, 40, 5, 151, 98, 253, 123,
+        ];
 
         // Example plaintext
         let plaintext = b"Hello, world!";
@@ -271,13 +315,17 @@ mod tests {
 
         // Assuming the receiver's secret key and sender's public key are known
         // Here we use predefined keys for testing
-        let receiver_sk_bytes = sender_sk_bytes; 
+        let receiver_sk_bytes = sender_sk_bytes;
         let sender_pk_bytes = receiver_pk_bytes;
 
         // Decrypt the encrypted data
         let decrypted_data = decrypt(encrypted_data, receiver_sk_bytes, sender_pk_bytes);
 
         // Verify that the decrypted data matches the original plaintext
-        assert_eq!(plaintext, &decrypted_data[..], "Decrypted data does not match the original plaintext.");
+        assert_eq!(
+            plaintext,
+            &decrypted_data[..],
+            "Decrypted data does not match the original plaintext."
+        );
     }
 }
