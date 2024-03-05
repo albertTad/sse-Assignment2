@@ -109,13 +109,6 @@ fn encrypt(input: Vec<u8>, sender_sk: [u8; 32], receiver_pk: [u8; 32]) -> Vec<u8
     // Hash the SharedSecret into 32 bytes using SHA-256.
     let hashed_shared_secret = Sha256::digest(&shared_secret.as_bytes());
 
-    // hasher.update(shared_secret);
-    // let hashed_shared_secret = hasher.finalize();
-
-    // let hashed_shared_secret = Sha256::new(&shared_secret);
-    // hasher.update(shared_secret);
-    // let hashed_shared_secret = hasher.finalize();
-
     // Transform the hashed bytes into an AES-256-GCM key (Key<Aes256Gcm>).
     let aes_key = Key::<Aes256Gcm>::from_slice(&hashed_shared_secret);
 
